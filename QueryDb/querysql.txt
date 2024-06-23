@@ -1,0 +1,82 @@
+https://drive.google.com/drive/folders/1H4a2hwxE_1kJpWY32lxQ6DHJ2CI5xdKs?usp=sharing
+
+CREATE DATABASE super_market;
+
+CREATE TABLE Gudang(
+  Kode_Gudang INT PRIMARY KEY,
+    Nama_Gudang VARCHAR(50) NOT NULL 
+);
+
+CREATE INDEX idx_Kode_Gudang ON Gudang(Kode_Gudang);
+
+CREATE TABLE Barang(
+  Kode_Barang INT PRIMARY KEY,
+  Nama_Barang VARCHAR(100) NOT NULL,
+  Harga_Barang DECIMAL(10, 2),
+  Jumlah_Barang INT NOT NULL,
+  Expired_Barang DATE NOT NULL,
+  Kode_Gudang_ID INT NOT NULL,
+  FOREIGN KEY (Kode_Gudang_ID) REFERENCES Gudang(Kode_Gudang)
+);
+
+CREATE INDEX idx_Kode_Barang ON Barang(Kode_Barang);
+CREATE INDEX idx_Kode_Gudang_ID ON Barang(Kode_Gudang_ID);
+CREATE INDEX idx_Expired_Barang ON Barang(Expired_Barang);
+
+CREATE OR REPLACE FUNCTION SP(
+    pageNum INT,
+    pageSize INT
+)
+RETURNS TABLE(
+    Kode_Gudang INT,
+    Nama_Gudang VARCHAR(50),
+    Kode_Barang INT,
+    Nama_Barang VARCHAR(100),
+    Harga_Barang DECIMAL(10, 2),
+    Jumlah_Barang INT,
+    Expired_Barang DATE
+) AS $$
+DECLARE
+    v_offset INT;
+BEGIN
+    v_offset := (pageNum - 1) * pageSize;
+
+RETURN QUERY
+SELECT
+G.Kode_Gudang,
+G.Nama_Gudang,
+B.Kode_Barang,
+B.Nama_Barang,
+B.Harga_Barang,
+B.Jumlah_Barang,
+B.Expired_Barang
+FROM
+barang B
+Join
+gudang G ON B.Kode_Gudang_ID = G.Kode_Gudang
+ORDER BY
+B.Kode_Barang
+LIMIT pageSize OFFSET v_offset;
+END $$ LANGUAGE plpgsql;
+
+SELECT * FROM SP(1, 30);
+
+CREATE OR REPLACE FUNCTION TRG_EXPIRED_BARANG()
+RETURNS TRIGGER AS $$
+BEGIN
+IF NEW."expired_barang" <= CURRENT_DATE
+THEN
+RAISE EXCEPTION 'Product with code % already expired!', NEW."kode_barang";
+END IF;
+
+RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER BARANG_EXPIRED
+    BEFORE INSERT ON Barang
+    FOR EACH ROW
+    EXECUTE FUNCTION TRG_EXPIRED_BARANG();
+
+drop trigger BARANG_EXPIRED ON Barang;
+drop function TRG_EXPIRED_BARANG();
